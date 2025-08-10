@@ -10,16 +10,42 @@ WebServer server(80);
 
 String currentGameId = "";
 bool gameActive = false;
+
+// NEW: Communication Protocol Variables
+const char MSG_START = '<';
+const char MSG_END = '>';
+const int SERIAL_TIMEOUT = 100;
+int commErrorCount = 0;
+const int MAX_COMM_ERRORS = 5;
+bool communicationError = false;
+unsigned long lastCommCheck = 0;
+
 void sendGameSetupToMega(String mode, String gameId, String p1Name, String p1Color, String p2Name, String p2Color) {
   // Send game setup data to Mega via Serial2
   Serial2.println("GAME_SETUP");
+  Serial2.flush(); // Ensure complete transmission
+  delay(100);      // Allow Mega time to process
+  
   Serial2.println("MODE:" + mode);
+  Serial2.flush();
+  
   Serial2.println("GAMEID:" + gameId);
+  Serial2.flush();
+  
   Serial2.println("P1NAME:" + p1Name);
+  Serial2.flush();
+  
   Serial2.println("P1COLOR:" + p1Color);
+  Serial2.flush();
+  
   Serial2.println("P2NAME:" + p2Name);
+  Serial2.flush();
+  
   Serial2.println("P2COLOR:" + p2Color);
+  Serial2.flush();
+  
   Serial2.println("START");  // Signal to Mega that setup is complete
+  Serial2.flush();
   
   Serial.println("Game setup sent to Mega:");
   Serial.println("  Mode: " + mode + ", GameID: " + gameId);
@@ -114,6 +140,7 @@ void handlePlayAgain() {
   if (server.method() == HTTP_POST) {
     if (currentGameId != "") {
       Serial2.println("PLAY_AGAIN");
+      Serial2.flush();
       Serial.println("Play Again command sent to Mega");
       gameActive = true; // Reactivate game
       server.send(200, "application/json", "{\"message\":\"Play again sent to Arduino\"}");
@@ -131,6 +158,7 @@ void handleEndGame() {
   if (server.method() == HTTP_POST) {
     if (currentGameId != "") {
       Serial2.println("END_GAME");
+      Serial2.flush();
       Serial.println("End Game command sent to Mega");
       
       // Clear game state
@@ -232,7 +260,10 @@ void handleGameStatus() {
 
 // === Health Check Endpoint ===
 void handleHealthCheck() {
-  String healthStatus = "{\"status\":\"ESP32 Bridge Ready\",\"gameId\":\"" + currentGameId + "\",\"gameActive\":" + (gameActive ? "true" : "false") + ",\"uptime\":" + String(millis()) + "}";
+  String healthStatus = "{\"status\":\"ESP32 Bridge Ready\",\"gameId\":\"" + currentGameId + 
+                        "\",\"gameActive\":" + (gameActive ? "true" : "false") + 
+                        ",\"uptime\":" + String(millis()) + 
+                        ",\"commErrors\":" + String(commErrorCount) + "}";
   server.send(200, "application/json", healthStatus);
 }
 
@@ -244,10 +275,27 @@ void handleCORS() {
   server.send(200);
 }
 
+// NEW: Parse messages with start/end markers
+String parseFramedMessage(String message) {
+  int startIdx = message.indexOf(MSG_START);
+  int endIdx = message.indexOf(MSG_END);
+  
+  if (startIdx >= 0 && endIdx > startIdx) {
+    return message.substring(startIdx + 1, endIdx);
+  }
+  return message; // Return original if not properly framed
+}
+
+// NEW: Check if message is properly framed
+bool isFramedMessage(String message) {
+  return (message.indexOf(MSG_START) >= 0 && message.indexOf(MSG_END) > message.indexOf(MSG_START));
+}
+
 // === Setup Function ===
 void setup() {
   Serial.begin(9600);        // For Serial Monitor
   Serial2.begin(9600, SERIAL_8N1, 16, 17);  // For Arduino Mega communication (pins 16=RX, 17=TX)
+  Serial2.setTimeout(SERIAL_TIMEOUT);
 
   // Start WiFi Access Point
   WiFi.softAP(ssid, password);
@@ -288,6 +336,14 @@ void setup() {
   // Initialize game state
   currentGameId = "";
   gameActive = false;
+  
+  // Wait for Serial2 to initialize
+  delay(1000);
+  
+  // Send initial "ready" message to Mega
+  Serial2.println("ESP32_READY");
+  Serial2.flush();
+  Serial.println("Sent ready signal to Arduino Mega");
 }
 
 // === Main Loop ===
@@ -296,23 +352,50 @@ void loop() {
 
   // === Handle incoming data from Arduino Mega ===
   if (Serial2.available()) {
-    String receivedData = Serial2.readStringUntil('\n');
+    // NEW: More robust reading with timeout
+    String receivedData = "";
+    unsigned long startReadTime = millis();
+    
+    // Read until we get a complete message or timeout
+    while (millis() - startReadTime < SERIAL_TIMEOUT) {
+      if (Serial2.available()) {
+        char c = Serial2.read();
+        if (c == '\n' || c == '\r') {
+          if (receivedData.length() > 0) break;
+        } else {
+          receivedData += c;
+        }
+      }
+      yield();
+    }
+    
     receivedData.trim();
     
     if (receivedData.length() > 0) {
-      Serial.println("From Mega: " + receivedData);
-
-      // Handle reset signal from Mega
-      if (receivedData == "RESET_GAME") {
-        handleResetFromMega();
-      }
-      // Handle other messages from Mega
-      else {
+      // Check if it's a framed message
+      if (isFramedMessage(receivedData)) {
+        String content = parseFramedMessage(receivedData);
+        Serial.println("From Mega (framed): " + content);
+        
+        // Handle reset signal from Mega
+        if (content == "RESET_GAME") {
+          handleResetFromMega();
+          return;
+        }
+        
+        // Handle MEGA_READY signal
+        if (content == "MEGA_READY") {
+          Serial.println("Arduino Mega is ready and connected");
+          communicationError = false;
+          commErrorCount = 0;
+          return;
+        }
+        
         // Parse score data from Mega (format: "player,diceValue")
-        int commaIndex = receivedData.indexOf(',');
+        int commaIndex = content.indexOf(',');
         if (commaIndex > 0) {
-          int player = receivedData.substring(0, commaIndex).toInt();
-          int diceValue = receivedData.substring(commaIndex + 1).toInt();
+          int player = content.substring(0, commaIndex).toInt();
+          int diceValue = content.substring(commaIndex + 1).toInt();
           
           // Validate data before sending to web app
           if (player >= 1 && player <= 2 && diceValue >= 1 && diceValue <= 6) {
@@ -322,21 +405,54 @@ void loop() {
             Serial.println("Invalid score data: Player=" + String(player) + ", Dice=" + String(diceValue));
           }
         } else {
-          // Handle other types of messages from Mega
-          Serial.println("Info from Mega: " + receivedData);
-          
-          // Check for other known commands
-          if (receivedData.startsWith("ERROR:")) {
-            Serial.println("Error from Mega: " + receivedData);
-          } else if (receivedData.startsWith("STATUS:")) {
-            Serial.println("Status from Mega: " + receivedData);
-          } else if (receivedData.startsWith("DEBUG:")) {
-            Serial.println("Debug from Mega: " + receivedData);
+          // Handle other types of messages
+          Serial.println("Info from Mega: " + content);
+        }
+      } 
+      else {
+        // Legacy non-framed message handling
+        Serial.println("From Mega (unframed): " + receivedData);
+        
+        // Handle reset signal from Mega
+        if (receivedData == "RESET_GAME") {
+          handleResetFromMega();
+        }
+        // Parse score data from Mega (format: "player,diceValue")
+        else {
+          int commaIndex = receivedData.indexOf(',');
+          if (commaIndex > 0) {
+            int player = receivedData.substring(0, commaIndex).toInt();
+            int diceValue = receivedData.substring(commaIndex + 1).toInt();
+            
+            // Validate data before sending to web app
+            if (player >= 1 && player <= 2 && diceValue >= 1 && diceValue <= 6) {
+              Serial.println("Valid score - Player " + String(player) + " rolled " + String(diceValue));
+              sendScoreToWebApp(player, diceValue);
+            } else {
+              Serial.println("Invalid score data: Player=" + String(player) + ", Dice=" + String(diceValue));
+              commErrorCount++;
+            }
           } else {
+            // Handle other types of messages from Mega
             Serial.println("Unknown message from Mega: " + receivedData);
           }
         }
       }
+    }
+  }
+  
+  // Check communication status periodically
+  if (millis() - lastCommCheck > 60000) { // Every minute
+    lastCommCheck = millis();
+    
+    if (commErrorCount > MAX_COMM_ERRORS) {
+      communicationError = true;
+      Serial.println("WARNING: High communication error count: " + String(commErrorCount));
+    }
+    
+    // Reset error count periodically
+    if (commErrorCount > 0 && millis() > 300000) { // After 5 minutes uptime
+      commErrorCount = 0;
     }
   }
   
@@ -379,33 +495,39 @@ void sendHeartbeat() {
   }
 }
 
+// NEW: Diagnostic function for Serial2 issues
+void dumpSerial2Buffer() {
+  Serial.print("Raw Serial2 buffer bytes: ");
+  int count = 0;
+  while (Serial2.available() && count < 50) {
+    byte b = Serial2.read();
+    Serial.print(b, HEX);
+    Serial.print(" ");
+    count++;
+  }
+  Serial.println();
+}
+
+// NEW: Function to reset communication errors
+void resetCommunicationErrors() {
+  communicationError = false;
+  commErrorCount = 0;
+}
+
 /*
- * ESP32 BRIDGE COMPLETE CODE
+ * ESP32 BRIDGE COMPLETE CODE - COMMUNICATION FIX VERSION
  * 
- * FEATURES IMPLEMENTED:
- * - Game Setup Communication (Web -> ESP32 -> Mega)
- * - Score Updates (Mega -> ESP32 -> Web)
- * - Play Again Command (Web -> ESP32 -> Mega)
- * - End Game Command (Web -> ESP32 -> Mega)
- * - Hardware Reset Handling (Mega -> ESP32 -> Web)
- * - Game State Management
- * - Error Handling & Validation
- * - CORS Support for Web App
- * - Health Check Endpoint
- * - Connection Status Monitoring
+ * FIXES APPLIED:
+ * 1. Removed all emoji characters from serial messages
+ * 2. Added reliable message protocol with start/end markers
+ * 3. Added serial flush after sending to ensure complete transmission
+ * 4. Added timeout handling for serial communication
+ * 5. Added diagnostics for troubleshooting
  * 
- * COMMUNICATION FLOW:
- * 1. Web App -> ESP32: Game setup, play again, end game
- * 2. ESP32 -> Mega: Forward commands via Serial2
- * 3. Mega -> ESP32: Score updates, reset signals
- * 4. ESP32 -> Web App: Score updates, reset notifications
+ * COMMUNICATION IMPROVEMENTS:
+ * - Support for both framed (<message>) and unframed messages
+ * - More robust message reading with timeouts
+ * - Better error detection and recovery
  * 
- * ENDPOINTS:
- * - POST /game-setup: Initialize game
- * - POST /play-again: Restart game
- * - POST /end-game: End current game
- * - GET /game-status: Get current status
- * - GET /health: System health check
- * 
- * READY FOR DEPLOYMENT
+ * This version should now reliably communicate with the fixed Arduino Mega.
  */
