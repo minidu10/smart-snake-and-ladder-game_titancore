@@ -1,8 +1,3 @@
-// Complete Smart Snake & Ladder Game - FastLED Enhanced with Integrated Effects
-// Arduino Mega + ESP32 Communication + Enhanced LED Effects + Player Ring Control
-// Date: 2025-08-10 | User: minidu10
-// Features: FastLED, ESP32 Communication, Exact Win Logic, Enhanced Ring Effects
-
 #include <FastLED.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -44,7 +39,7 @@ bool receivingSetup = false;
 bool setupComplete = false;
 bool gameStarted = false;
 
-// NEW: Communication Protocol Variables
+// Communication Protocol Variables
 const char MSG_START = '<';
 const char MSG_END = '>';
 const int SERIAL_TIMEOUT = 100;
@@ -79,8 +74,8 @@ const int hallPins[6] = {41, 43, 45, 47, 49, 51};
 // Motor Control with Speed-based timing
 const int MOTOR_MAX_SPEED = 90;
 const int MOTOR_MIN_SPEED = 60;
-const int ROBOT_MAX_SPEED = 80;         // FIXED: Changed from 980 to 80
-const int ROBOT_MIN_SPEED = 45;         // NEW: Robot min speed (slower start)
+const int ROBOT_MAX_SPEED = 80;       
+const int ROBOT_MIN_SPEED = 45;        
 const int PRECISION_READING_SAMPLES = 10;
 int lastMotorSpeed = 0;
 unsigned long motorAccelerationTime = 0;
@@ -158,14 +153,14 @@ Jump ladders[] = {
 };
 
 Jump snakes[] = {
-  {99, 62, 5, true}, {64, 60, 7, true}, {95, 38, 14, true},
+  {99, 62, 6, true}, {64, 60, 7, true}, {95, 38, 14, true},
   {16, 6, 4, true}, {49, 11, 7, true}, {69, 51, 5, true}, {88, 67, 5, true}
 };
 
 const int numLadders = sizeof(ladders) / sizeof(ladders[0]);
 const int numSnakes = sizeof(snakes) / sizeof(snakes[0]);
 
-// === EXACT WIN LOGIC FUNCTIONS ===
+//EXACT WIN LOGIC FUNCTIONS
 bool isValidMove(int currentPos, int diceRoll) {
   int targetPosition = currentPos + diceRoll;
   return targetPosition <= 100;
@@ -185,7 +180,7 @@ int calculateFinalPosition(int currentPos, int diceRoll) {
   return targetPosition;
 }
 
-// === COLOR CONVERSION FUNCTIONS ===
+//COLOR CONVERSION FUNCTIONS
 CRGB parseHexColor(String hexColor) {
   if (hexColor.startsWith("#")) {
     hexColor = hexColor.substring(1);
@@ -199,7 +194,7 @@ CRGB parseHexColor(String hexColor) {
   return CRGB(r, g, b);
 }
 
-// === SOUND FUNCTIONS ===
+//SOUND FUNCTIONS
 void initializeSound() {
   mp3Serial.begin(9600);
   delay(500);
@@ -264,7 +259,7 @@ void playEffectThenResumeMusic(int effect) {
   }
 }
 
-// === PRE-GAME RAINBOW EFFECTS WITH SNAKE & LADDER ===
+//PRE-GAME RAINBOW EFFECTS WITH SNAKE & LADDER
 void updatePreGameRainbow() {
   if (millis() - lastRainbowUpdate > 50) {
     // Grid rainbow effect
@@ -297,7 +292,7 @@ void updatePreGameRainbow() {
   }
 }
 
-// === DECORATIVE LED FUNCTIONS ===
+//DECORATIVE LED FUNCTIONS
 uint32_t colorHSV(int hue) {
   hue = hue % 1536;
   int region = hue / 256;
@@ -468,7 +463,7 @@ void decoWinEffect() {
   }
 }
 
-// === ENHANCED PLAYER RING LED FUNCTIONS ===
+//ENHANCED PLAYER RING LED FUNCTIONS
 // Player Ring specification: Player 2 gets first 16 LEDs (0-15), Player 1 gets second 16 LEDs (16-31)
 void updatePlayerRingIndicator(int currentPlayer) {
   if (millis() - lastRingUpdate > RING_BLINK_SPEED) {
@@ -561,7 +556,7 @@ void playerRingInvalidMoveEffect(int player) {
   }
 }
 
-// === ESP32 COMMUNICATION FUNCTIONS - FIXED WITH RELIABLE PROTOCOL ===
+//ESP32 COMMUNICATION FUNCTIONS - FIXED WITH RELIABLE PROTOCOL
 void handleESP32Communication() {
   if (Serial1.available()) {
     // New robust message reading with timeout
@@ -655,22 +650,38 @@ void handleESP32Communication() {
       Serial.println("End Game executed - System reset to waiting state");
     }
     else if (receivingSetup) {
-      if (line.startsWith("MODE:")) {
-        mode = line.substring(5);
-      } else if (line.startsWith("GAMEID:")) {
-        gameId = line.substring(7);
-      } else if (line.startsWith("P1NAME:")) {
-        p1Name = line.substring(7);
-      } else if (line.startsWith("P1COLOR:")) {
-        p1Color = line.substring(8);
-      } else if (line.startsWith("P2NAME:")) {
-        p2Name = line.substring(7);
-      } else if (line.startsWith("P2COLOR:")) {
-        p2Color = line.substring(8);
-      } else {
-        Serial.println("Unknown line: " + line);
-      }
+  if (line.startsWith("MODE:")) {
+    mode = line.substring(5);
+  } else if (line.startsWith("GAMEID:")) {
+    gameId = line.substring(7);
+  } else if (line.startsWith("P1NAME:")) {
+    // NEW: Handle names with markers
+    String nameWithMarkers = line.substring(7);
+    int startBracket = nameWithMarkers.indexOf('[');
+    int endBracket = nameWithMarkers.indexOf(']');
+    if (startBracket >= 0 && endBracket > startBracket) {
+      p1Name = nameWithMarkers.substring(startBracket + 1, endBracket);
+    } else {
+      p1Name = nameWithMarkers;
     }
+  } else if (line.startsWith("P1COLOR:")) {
+    p1Color = line.substring(8);
+  } else if (line.startsWith("P2NAME:")) {
+    // Handle names with markers
+    String nameWithMarkers = line.substring(7);
+    int startBracket = nameWithMarkers.indexOf('[');
+    int endBracket = nameWithMarkers.indexOf(']');
+    if (startBracket >= 0 && endBracket > startBracket) {
+      p2Name = nameWithMarkers.substring(startBracket + 1, endBracket);
+    } else {
+      p2Name = nameWithMarkers;
+    }
+  } else if (line.startsWith("P2COLOR:")) {
+    p2Color = line.substring(8);
+  } else {
+    Serial.println("Unknown line: " + line);
+  }
+}
     else {
       // Handle any other commands that might come from ESP32
       Serial.println("ESP32 Message: " + line);
@@ -685,23 +696,34 @@ void initializePlayersFromESP32() {
   
   // Set player colors using FastLED CRGB
   players[0].colorStr = p1Color;
-  players[1].colorStr = p2Color;
   players[0].colorCode = parseHexColor(p1Color);
-  players[1].colorCode = parseHexColor(p2Color);
-  
-  // Initialize game data
-  for (int i = 0; i < 2; i++) {
-    players[i].position = 1;
-    players[i].score = 0;
-  }
   
   // Set game mode
   if (mode.equalsIgnoreCase("single")) {
     singlePlayerMode = true;
     dualPlayerMode = false;
+    
+    // Set default robot color for single player mode
+    players[1].colorStr = "#FFAA00"; // Default blue color for robot
+    players[1].colorCode = CRGB(255, 170, 0);
+    
+    // If the robot name isn't set properly, give it a default name
+    if (players[1].name.length() == 0 || players[1].name.equals("null")) {
+      players[1].name = "Robot";
+    }
   } else {
     singlePlayerMode = false;
     dualPlayerMode = true;
+    
+    // Use the color received from ESP32 for player 2 in dual player mode
+    players[1].colorStr = p2Color;
+    players[1].colorCode = parseHexColor(p2Color);
+  }
+  
+  // Initialize game data
+  for (int i = 0; i < 2; i++) {
+    players[i].position = 1;
+    players[i].score = 0;
   }
   
   Serial.println("Players initialized with custom colors:");
@@ -710,7 +732,7 @@ void initializePlayersFromESP32() {
   Serial.println("Mode: " + String(singlePlayerMode ? "Single" : "Dual"));
 }
 
-// FIXED: Improved reliable communication with start/end markers and flush
+//Improved reliable communication with start/end markers and flush
 void sendDiceResultToESP32(int playerNumber, int diceValue) {
   // Format with start/end markers to improve reliability
   String dataToSend = String(MSG_START) + 
@@ -728,13 +750,13 @@ void sendDiceResultToESP32(int playerNumber, int diceValue) {
                  ", Dice " + String(diceValue));
 }
 
-// NEW: Reset communication error state
+//Reset communication error state
 void resetCommunicationErrors() {
   communicationError = false;
   commErrorCount = 0;
 }
 
-// === SPEED-BASED TIMING FUNCTIONS ===
+//SPEED-BASED TIMING FUNCTIONS
 int calculateSpeedBasedWaitTime(int maxSpeed, unsigned long accelerationTime, unsigned long runTime) {
   int baseWait = 5; // Minimum 5 seconds for slow speeds
   int maxWait = 8;  // Maximum 8 seconds for high speeds
@@ -754,7 +776,7 @@ int calculateSpeedBasedWaitTime(int maxSpeed, unsigned long accelerationTime, un
   return waitTime;
 }
 
-// === SETUP ===
+
 void setup() {
   Serial.begin(9600);
   
@@ -814,7 +836,7 @@ void setup() {
   systemReady = true;
 }
 
-// === MAIN LOOP ===
+
 void loop() {
   if (!systemReady) {
     handleSystemError();
@@ -855,7 +877,7 @@ void loop() {
   delay(10);
 }
 
-// === STARTUP AND GAME EFFECTS ===
+//STARTUP AND GAME EFFECTS
 void showStartupLEDSequence() {
   Serial.println("Starting integrated LED sequence");
   
@@ -926,7 +948,7 @@ void showAllLEDsGameEffect() {
   drawGameBoard();
 }
 
-// === PLAYER INPUT HANDLING ===
+//PLAYER INPUT HANDLING
 void handleSinglePlayerInput() {
   static unsigned long lastDebounceTime = 0;
   const unsigned long debounceDelay = 50;
@@ -1007,7 +1029,7 @@ void handleDualPlayerInput() {
   }
 }
 
-// === DISPLAY FUNCTIONS ===
+//DISPLAY FUNCTIONS
 void showWaitingScreen() {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -1167,7 +1189,7 @@ void handleSystemError() {
   }
 }
 
-// === RESET & PLAY AGAIN FUNCTIONS ===
+//RESET & PLAY AGAIN FUNCTIONS
 void checkResetButton() {
   if (millis() - lastResetCheck > 200) {
     if (digitalRead(resetButtonPin) == LOW) {
@@ -1333,7 +1355,7 @@ void performPlayAgain() {
   Serial.println("Play Again - New game started");
 }
 
-// === SINGLE PLAYER AUTO TURN ===
+//SINGLE PLAYER AUTO TURN
 void handleAutomaticTurn(int player) {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -1421,7 +1443,7 @@ int performAutomaticDiceRollWithTiming() {
   return waitForPreciseStopWithTiming();
 }
 
-// === ENHANCED TURN HANDLING ===
+//ENHANCED TURN HANDLING
 void handleEnhancedTurn(int player) {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -1443,7 +1465,7 @@ void handleEnhancedTurn(int player) {
   delay(2000);
 }
 
-// === MOTOR CONTROL WITH SPEED-BASED TIMING ===
+//MOTOR CONTROL WITH SPEED-BASED TIMING
 int controlPrecisionMotorWithTiming(int player) {
   int buttonPin = (player == 0) ? button1Pin : button2Pin;
   unsigned long buttonStartTime = 0;
@@ -1545,12 +1567,12 @@ int waitForPreciseStopWithTiming() {
   lcd.print("Wheel stopped!      ");
   lcd.setCursor(0, 2);
   lcd.print("Final: " + String(finalResult) + "     ");
-  lcd.setCursor(0, 3);
+    lcd.setCursor(0, 3);
   lcd.print("                    ");
   return finalResult;
 }
 
-// === SENSOR READING FUNCTIONS ===
+//SENSOR READING FUNCTIONS
 int getPrecisePosition() {
   static int readings[PRECISION_READING_SAMPLES];
   static int readIndex = 0;
@@ -1623,7 +1645,7 @@ int getFinalPreciseReading() {
   return result;
 }
 
-// === MOVE PROCESSING WITH EXACT WIN LOGIC ===
+//MOVE PROCESSING WITH EXACT WIN LOGIC
 void processMoveWithValidation(int player, int diceScore) {
   int oldPosition = players[player].position;
   if (diceScore < 1 || diceScore > 6) {
@@ -1701,7 +1723,7 @@ void processMoveWithValidation(int player, int diceScore) {
   delay(1500);
 }
 
-// === INVALID MOVE VISUAL EFFECT ===
+//INVALID MOVE VISUAL EFFECT
 void showInvalidMoveEffect() {
   int playerLedIndex = players[currentPlayer].position - 1;
   
@@ -1768,15 +1790,11 @@ void handleDiceError(int player) {
   }
 }
 
-// === GAME BOARD DRAWING FUNCTIONS ===
+//GAME BOARD DRAWING FUNCTIONS
 void drawStaticElements() {
-  // Draw basic grid pattern with DIMMER background - CHANGED
+  // Draw all grid LEDs in white - MODIFIED to make all grid LEDs white
   for (int i = 0; i < NUM_GRID_LEDS; i++) {
-    if ((i / 10) % 2 == 0) {
-      gridLEDs[i] = CRGB(15, 15, 20);  // CHANGED: Much dimmer (was 40,40,50)
-    } else {
-      gridLEDs[i] = CRGB(20, 15, 15);  // CHANGED: Much dimmer (was 50,40,40)
-    }
+    gridLEDs[i] = CRGB::White;  // CHANGED: Use white background for all positions
   }
   
   // Draw static ladder LEDs
@@ -1802,28 +1820,31 @@ void drawGameBoard() {
   int p1LedIndex = players[0].position - 1;
   int p2LedIndex = players[1].position - 1;
   
-  // NEW: Add blinking for overlapping players - MAJOR CHANGE
-  static unsigned long lastBlinkUpdate = 0;
-  static bool blinkState = false;
-  const unsigned long PLAYER_BLINK_SPEED = 400; // 400ms blink interval
-  
-  if (millis() - lastBlinkUpdate > PLAYER_BLINK_SPEED) {
-    blinkState = !blinkState;
-    lastBlinkUpdate = millis();
-  }
-  
-  // If both players are on the same position - ALTERNATING BLINK
+  // Check if players are on the same position
   if (p1LedIndex == p2LedIndex && p1LedIndex >= 0 && p1LedIndex < NUM_GRID_LEDS) {
-    if (blinkState) {
-      // Show Player 1 color at full brightness
-      gridLEDs[p1LedIndex] = players[0].colorCode;
-      gridLEDs[p1LedIndex] %= PLAYER_BRIGHTNESS; // Force full brightness
-    } else {
-      // Show Player 2 color at full brightness
-      gridLEDs[p1LedIndex] = players[1].colorCode;
-      gridLEDs[p1LedIndex] %= PLAYER_BRIGHTNESS; // Force full brightness
-    }
-  } else {
+    // Players overlap - create a combined color effect
+    
+    // Get both player colors
+    CRGB p1Color = players[0].colorCode;
+    CRGB p2Color = players[1].colorCode;
+    
+    // Create a combined color by adding RGB values with brightness limiting
+    // This makes the overlapping position contain both colors
+    uint8_t combinedR = min(255, p1Color.r + p2Color.r);
+    uint8_t combinedG = min(255, p1Color.g + p2Color.g);
+    uint8_t combinedB = min(255, p1Color.b + p2Color.b);
+    
+    // Set the LED to the combined color
+    gridLEDs[p1LedIndex] = CRGB(combinedR, combinedG, combinedB);
+    
+    // Force full brightness
+    gridLEDs[p1LedIndex] %= PLAYER_BRIGHTNESS;
+    
+    // Debug message
+    Serial.println("Overlap detected! Created combined color: R=" + 
+                  String(combinedR) + " G=" + String(combinedG) + " B=" + String(combinedB));
+  } 
+  else {
     // Normal case - players on different positions
     if (p1LedIndex >= 0 && p1LedIndex < NUM_GRID_LEDS) {
       gridLEDs[p1LedIndex] = players[0].colorCode;
@@ -1957,7 +1978,7 @@ void showSpecialEffect(bool isLadder, int start, int end) {
   drawGameBoard();
 }
 
-// === FINAL SYSTEM FUNCTIONS ===
+//FINAL SYSTEM FUNCTIONS
 void finalCleanup() {
   Serial.println("Performing final cleanup...");
   
@@ -1982,7 +2003,7 @@ void finalCleanup() {
   }
 }
 
-// === DIAGNOSTIC FUNCTIONS - NEW ===
+//diagonistic function
 void dumpSerialBuffer() {
   Serial.print("Raw Serial1 buffer: ");
   int count = 0;
@@ -1994,24 +2015,3 @@ void dumpSerialBuffer() {
   }
   Serial.println();
 }
-
-// === END OF COMPLETE CODE ===
-
-/*
- * COMPLETE ARDUINO MEGA CODE - COMMUNICATION FIX VERSION
- * 
- * FIXES APPLIED:
- * 1. Removed all emoji characters from serial messages
- * 2. Added reliable message protocol with start/end markers
- * 3. Added serial flush after sending to ensure complete transmission
- * 4. Added timeout handling for serial communication
- * 5. Added buffer diagnostics for troubleshooting
- * 
- * COMMUNICATION IMPROVEMENTS:
- * - Added MSG_START '<' and MSG_END '>' markers to frame all messages
- * - Implemented more robust message reading with timeout
- * - Better error handling and recovery for serial communication
- * - Reset signals now properly framed with markers
- * 
- * This version should resolve all ESP32 communication issues.
- */
