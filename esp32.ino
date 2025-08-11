@@ -11,7 +11,7 @@ WebServer server(80);
 String currentGameId = "";
 bool gameActive = false;
 
-// NEW: Communication Protocol Variables
+//  Communication Protocol Variables
 const char MSG_START = '<';
 const char MSG_END = '>';
 const int SERIAL_TIMEOUT = 100;
@@ -21,6 +21,14 @@ bool communicationError = false;
 unsigned long lastCommCheck = 0;
 
 void sendGameSetupToMega(String mode, String gameId, String p1Name, String p1Color, String p2Name, String p2Color) {
+  // Ensure minimum name length to prevent serial issues
+  if (p1Name.length() < 3) {
+    p1Name = p1Name + String("   ").substring(0, 3 - p1Name.length());
+  }
+  if (p2Name.length() < 3) {
+    p2Name = p2Name + String("   ").substring(0, 3 - p2Name.length());
+  }
+  
   // Send game setup data to Mega via Serial2
   Serial2.println("GAME_SETUP");
   Serial2.flush(); // Ensure complete transmission
@@ -28,21 +36,28 @@ void sendGameSetupToMega(String mode, String gameId, String p1Name, String p1Col
   
   Serial2.println("MODE:" + mode);
   Serial2.flush();
+  delay(50);  // Add small delay between commands
   
   Serial2.println("GAMEID:" + gameId);
   Serial2.flush();
+  delay(50);  // Add small delay between commands
   
-  Serial2.println("P1NAME:" + p1Name);
+  // Add special marker for names to ensure they're properly handled
+  Serial2.println("P1NAME:[" + p1Name + "]");  //  Added brackets as markers
   Serial2.flush();
+  delay(50);  // Add small delay between commands
   
   Serial2.println("P1COLOR:" + p1Color);
   Serial2.flush();
+  delay(50);  //  Add small delay between commands
   
-  Serial2.println("P2NAME:" + p2Name);
+  Serial2.println("P2NAME:[" + p2Name + "]");  //  Added brackets as markers
   Serial2.flush();
+  delay(50);  //  Add small delay between commands
   
   Serial2.println("P2COLOR:" + p2Color);
   Serial2.flush();
+  delay(50);  // Add small delay between commands
   
   Serial2.println("START");  // Signal to Mega that setup is complete
   Serial2.flush();
@@ -53,7 +68,7 @@ void sendGameSetupToMega(String mode, String gameId, String p1Name, String p1Col
   Serial.println("  P2: " + p2Name + " (" + p2Color + ")");
 }
 
-// === Handle Game Setup from Web App ===
+//Handle Game Setup from Web App
 void handleGameSetup() {
   if (server.method() == HTTP_POST) {
     StaticJsonDocument<512> doc;
@@ -96,7 +111,7 @@ void handleGameSetup() {
   }
 }
 
-// === Send Player Score to Web App Backend ===
+//Send Player Score to Web App Backend
 void sendScoreToWebApp(int player, int diceValue) {
   if (currentGameId == "") {
     Serial.println("No gameId set, score not sent to web app");
@@ -135,7 +150,7 @@ void sendScoreToWebApp(int player, int diceValue) {
   http.end();
 }
 
-// === Handle Play Again Command from Web App ===
+//Handle Play Again Command from Web App
 void handlePlayAgain() {
   if (server.method() == HTTP_POST) {
     if (currentGameId != "") {
@@ -153,7 +168,7 @@ void handlePlayAgain() {
   }
 }
 
-// === Handle End Game Command from Web App ===
+//Handle End Game Command from Web App
 void handleEndGame() {
   if (server.method() == HTTP_POST) {
     if (currentGameId != "") {
@@ -175,7 +190,7 @@ void handleEndGame() {
   }
 }
 
-// === Handle Reset Game Command from Arduino Mega ===
+//Handle Reset Game Command from Arduino Mega
 void handleResetFromMega() {
   Serial.println("Hardware reset signal received from Arduino Mega");
   
@@ -204,7 +219,7 @@ void handleResetFromMega() {
   }
 }
 
-// === Send Reset Signal to Web App Backend ===
+//Send Reset Signal to Web App Backend
 bool sendResetToWebApp() {
   if (currentGameId == "") {
     Serial.println("No gameId set, reset not sent to web app");
@@ -245,7 +260,7 @@ bool sendResetToWebApp() {
   return success;
 }
 
-// === Get Current Game Status ===
+//Get Current Game Status
 void handleGameStatus() {
   String status = "waiting";
   if (currentGameId != "" && gameActive) {
@@ -258,7 +273,7 @@ void handleGameStatus() {
   server.send(200, "application/json", response);
 }
 
-// === Health Check Endpoint ===
+//Health Check Endpoint
 void handleHealthCheck() {
   String healthStatus = "{\"status\":\"ESP32 Bridge Ready\",\"gameId\":\"" + currentGameId + 
                         "\",\"gameActive\":" + (gameActive ? "true" : "false") + 
@@ -267,7 +282,7 @@ void handleHealthCheck() {
   server.send(200, "application/json", healthStatus);
 }
 
-// === CORS Headers for Web App ===
+//CORS Headers for Web App
 void handleCORS() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -275,7 +290,7 @@ void handleCORS() {
   server.send(200);
 }
 
-// NEW: Parse messages with start/end markers
+//Parse messages with start/end markers
 String parseFramedMessage(String message) {
   int startIdx = message.indexOf(MSG_START);
   int endIdx = message.indexOf(MSG_END);
@@ -286,12 +301,12 @@ String parseFramedMessage(String message) {
   return message; // Return original if not properly framed
 }
 
-// NEW: Check if message is properly framed
+// Check if message is properly framed
 bool isFramedMessage(String message) {
   return (message.indexOf(MSG_START) >= 0 && message.indexOf(MSG_END) > message.indexOf(MSG_START));
 }
 
-// === Setup Function ===
+
 void setup() {
   Serial.begin(9600);        // For Serial Monitor
   Serial2.begin(9600, SERIAL_8N1, 16, 17);  // For Arduino Mega communication (pins 16=RX, 17=TX)
@@ -346,11 +361,11 @@ void setup() {
   Serial.println("Sent ready signal to Arduino Mega");
 }
 
-// === Main Loop ===
+
 void loop() {
   server.handleClient();
 
-  // === Handle incoming data from Arduino Mega ===
+  //Handle incoming data from Arduino Mega
   if (Serial2.available()) {
     // NEW: More robust reading with timeout
     String receivedData = "";
@@ -460,7 +475,7 @@ void loop() {
   delay(10);
 }
 
-// === Additional Utility Functions ===
+//Additional Utility Functions
 
 // Function to check if ESP32 is connected to backend
 bool testBackendConnection() {
@@ -495,7 +510,7 @@ void sendHeartbeat() {
   }
 }
 
-// NEW: Diagnostic function for Serial2 issues
+//Diagnostic function for Serial2 issues
 void dumpSerial2Buffer() {
   Serial.print("Raw Serial2 buffer bytes: ");
   int count = 0;
@@ -508,26 +523,8 @@ void dumpSerial2Buffer() {
   Serial.println();
 }
 
-// NEW: Function to reset communication errors
+//Function to reset communication errors
 void resetCommunicationErrors() {
   communicationError = false;
   commErrorCount = 0;
 }
-
-/*
- * ESP32 BRIDGE COMPLETE CODE - COMMUNICATION FIX VERSION
- * 
- * FIXES APPLIED:
- * 1. Removed all emoji characters from serial messages
- * 2. Added reliable message protocol with start/end markers
- * 3. Added serial flush after sending to ensure complete transmission
- * 4. Added timeout handling for serial communication
- * 5. Added diagnostics for troubleshooting
- * 
- * COMMUNICATION IMPROVEMENTS:
- * - Support for both framed (<message>) and unframed messages
- * - More robust message reading with timeouts
- * - Better error detection and recovery
- * 
- * This version should now reliably communicate with the fixed Arduino Mega.
- */
