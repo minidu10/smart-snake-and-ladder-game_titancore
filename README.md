@@ -1,70 +1,86 @@
-# Smart Snake and Ladder Game 🎲
+# Smart Snake & Ladder 🎲
 
-A modern web-based implementation of the classic Snake and Ladder board game with smart features and interactive gameplay.
+An interactive Snake & Ladder board game that connects a real, physical board
+to a full-stack web application. Players press a button on the board, and the
+web app and the board LEDs stay in sync.
 
-## 📋 Prerequisites
+## Features
 
-Before running this project, make sure you have the following installed on your system:
+- **Physical board** with an LED grid, an automated spinning wheel and an LCD display
+- **Full game logic**: snakes send you down and ladders take you up, automatically
+- **Real-time sync** between player colors in the web UI and the LEDs on the board
+- **Two modes**
+  - Single Player: play against an automated robot
+  - Dual Player: head-to-head on the physical board
+- **Accounts**: sign up and log in before starting a game
 
-- Node.js (version 14.0 or higher)
-- MongoDB(Community Edition)
-- Git(for cloning the repository)
+## Tech stack
 
-## 🚀 Installation & Setup
+| Part | Technology |
+|---|---|
+| Hardware | Arduino Mega, ESP32, LED grid, LCD display, push buttons |
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Backend | Node.js, Express |
+| Database | MongoDB |
 
-## Step 1: Clone the Repository
-```bash
-git clone https://github.com/yourusername/smart-snake-ladder-game.git
-cd smart-snake-ladder-game
+## Project structure
+
+```
+├── arduino_mega.ino        # Board logic: LEDs, wheel, LCD, buttons
+├── esp32.ino               # Wi-Fi bridge between the board and the web app
+└── Ludogame/
+    ├── backend/            # Express API (auth and game routes)
+    └── frontend/           # React web app
 ```
 
-## Step 2: Install Dependencies
-Navigate to the project directory and install required packages:
+## Getting started
+
+You need Node.js 18 or newer and MongoDB.
+
+### 1. Clone
+
 ```bash
+git clone https://github.com/minidu10/smart-snake-and-ladder-game_titancore.git
+cd smart-snake-and-ladder-game_titancore
+```
+
+### 2. Backend
+
+```bash
+cd Ludogame/backend
 npm install
+cp .env.example .env      # then edit the values
+node index.js
 ```
 
-## Step 3: Start MongoDB
-Make sure MongoDB is running on your system:
-- **Windows**: Start MongoDB service from Services or run `mongod` in command prompt
-- **macOS/Linux**: Run `sudo systemctl start mongod` or `brew services start mongodb-community`
+The API runs on `http://localhost:5000`.
 
-🎯 Running the Application
+### 3. Frontend
 
-## Step 1: Start the Backend Server
-1. Navigate to the backend directory:
-   ```bash
-   cd ludogame/backend
-   ```
+Open a second terminal:
 
-2. Start the backend server:
-   ```bash
-   node index.js
-   ```
-   
-   You should see a message indicating the server is running (typically on port 3000 or 5000).
+```bash
+cd Ludogame/frontend
+npm install
+npm run dev
+```
 
-## Step 2: Start the Frontend Development Server
-1. Open a new terminal/command prompt
-2. Navigate to the frontend path:
-   ```bash
-   cd ludogame/frontend
-   ```
+Open the address shown in the terminal (usually `http://localhost:5173`).
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+### 4. Hardware
 
-## Step 3: Access the Game
-- Open your web browser
-- Navigate to `http://localhost:3000` (or the port shown in your terminal)
-- Start playing the Smart Snake and Ladder game!
+1. Upload `arduino_mega.ino` to the Arduino Mega.
+2. Upload `esp32.ino` to the ESP32.
+3. Power the board. The ESP32 links the board to the web app.
 
-## 🎮 How to Play
+## How to play
 
-1. Open the game in your web browser
-2. Select mode and enter names start game
-3. For players ,push the push button to play
-4. Land on a ladder to climb up, hit a snake to slide down
-5. First player to reach the end wins!
+1. Sign up or log in.
+2. Choose Single Player or Dual Player and enter the player names.
+3. Press the push button on the board to spin.
+4. Land on a ladder to climb up. Land on a snake to slide down.
+5. The first player to reach the last square wins.
+
+## License
+
+MIT
